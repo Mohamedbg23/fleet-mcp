@@ -45,7 +45,7 @@ You need **one server with a public IP and a domain name** pointing at it. A fre
 **1. On the hub:**
 
 ```bash
-git clone https://github.com/YOUR_USER/fleet-mcp.git
+git clone https://github.com/Mohamedbg23/fleet-mcp.git
 cd fleet-mcp
 sudo ./install.sh your-name.duckdns.org
 ```
