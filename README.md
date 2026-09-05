@@ -38,35 +38,109 @@ Realistic 20-step session across 3 hosts:
 
 ---
 
-## Setup (two commands)
+## Setup
 
-You need **one server with a public IP and a domain name** pointing at it. A free [DuckDNS](https://duckdns.org) subdomain works. That box becomes the hub; the others are reached over your private network and need no public exposure at all.
+**What you need:** one server with a public IP and a domain name pointing at it. A free [DuckDNS](https://duckdns.org) subdomain works fine. That box becomes the **hub**.
 
-**1. On the hub:**
+Your other servers stay completely private — they never need a public IP, and **you never log into them to install anything**. The hub reaches them over SSH and does the work.
+
+Every command below says which machine to run it on. There are no hidden steps.
+
+### Step 1 — on the HUB: install
 
 ```bash
+# >>> RUN THIS ON THE HUB <<<
 git clone https://github.com/Mohamedbg23/fleet-mcp.git
 cd fleet-mcp
 sudo ./install.sh your-name.duckdns.org
 ```
 
-That installs the server, gets a TLS certificate, generates a random secret URL path, and prints your connector URL:
+When it finishes it prints your connector URL:
 
 ```
-https://your-name.duckdns.org/a1b2c3.../mcp
+https://your-name.duckdns.org/a1b2c3d4e5f6.../mcp
 ```
 
-**2. Add that URL to your MCP client** as a custom / remote connector. Done — you can now run commands on the hub.
+The installer also copies the `fleet-add` command to `/usr/local/bin/fleet-add` **on the hub**, so from Step 3 onward you can run `fleet-add` from any folder — but always while logged into the hub.
 
-**3. Add more servers, one command each:**
+### Step 2 — in your MCP client: connect
+
+Add that URL as a **custom / remote MCP connector**. That's it — you can now run commands on the hub.
+
+### Step 3 — on the HUB: add your other servers
+
+Run this once per server you want to manage. **On the hub, not on the server you're adding.**
 
 ```bash
+# >>> RUN THIS ON THE HUB <<<
 fleet-add web-1 10.0.0.11 ~/web-1.key
 ```
 
-The key argument is only needed the first time, to install the fleet key. Add `--harden` to lock down sshd and install fail2ban, or `--keepalive` for the idle guard (see below).
+| argument | meaning |
+|---|---|
+| `web-1` | any name you like — this is what you'll type in `on="web-1"` |
+| `10.0.0.11` | the address **the hub** uses to reach it (a private IP is ideal) |
+| `~/web-1.key` | the SSH key you *already* use for that server — **a file on the hub** |
 
-New hosts appear in `on="all"` **immediately** — `hosts.json` is hot-reloaded, so there is no restart and no code to edit.
+The key is only needed this one time: `fleet-add` uses it to install the shared fleet key on the new box, and everything afterwards uses the fleet key. If that key currently lives on your laptop, copy it to the hub first:
+
+```bash
+# >>> RUN THIS ON YOUR LAPTOP <<<
+scp ~/.ssh/web-1.key ubuntu@your-name.duckdns.org:~/
+```
+
+Already able to SSH from the hub to that server? Then drop the key argument entirely:
+
+```bash
+# >>> ON THE HUB <<<
+fleet-add web-1 10.0.0.11
+```
+
+Optional extras, same command — harden sshd + install fail2ban, and/or the idle guard:
+
+```bash
+# >>> ON THE HUB <<<
+fleet-add web-1 10.0.0.11 ~/web-1.key --harden --keepalive
+```
+
+**New hosts join `on="all"` immediately.** `hosts.json` is hot-reloaded — no restart, no code to edit, nothing to redeploy.
+
+### Where everything lives (all on the hub)
+
+| path | what it is |
+|---|---|
+| `/usr/local/bin/fleet-add` | the add-a-server command |
+| `/etc/mcp-fleet/hosts.json` | your host list — `fleet-add` writes it, you can hand-edit it too |
+| `/opt/mcp-fleet/server.py` | the server itself |
+| `~/.ssh/fleet` | the shared fleet key |
+| `/etc/caddy/Caddyfile` | your domain + the secret URL path |
+| `/var/log/mcp-fleet.log` | audit log of every command run |
+| `/usr/local/bin/harden-ssh.sh`, `oci-keepalive.sh` | the optional extras |
+
+### Check it worked
+
+```bash
+# >>> ON THE HUB <<<
+systemctl status mcp-fleet          # should be active
+cat /etc/mcp-fleet/hosts.json       # your servers
+```
+
+Then from your MCP client:
+
+```
+sh(cmd="#status", on="all")
+```
+
+You should get one line per server. If you do, you're done.
+
+### Adding a server by hand (no fleet-add)
+
+`fleet-add` is only a convenience. The two things that actually matter:
+
+1. the hub's `~/.ssh/fleet.pub` is in that server's `~/.ssh/authorized_keys`
+2. the server is listed in `/etc/mcp-fleet/hosts.json` as `{"name": "address"}`
+
+Do those two things and it works.
 
 ---
 
