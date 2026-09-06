@@ -13,35 +13,55 @@
     <div class="fleet-head">
         <div>
             <h1>Publish a service</h1>
-            <p class="sub">Put a local port on your HTTPS domain. No firewall change, no extra open port.</p>
+            <p class="sub">Give a local port a public HTTPS address. No firewall change, no extra open port.</p>
         </div>
     </div>
 
+    <div class="modes">
+        <button id="m-path" class="mode active" type="button">
+            <span class="mt">A path on my domain</span>
+            <span class="md">fastest &mdash; works immediately</span>
+        </button>
+        <button id="m-dom" class="mode" type="button">
+            <span class="mt">Its own domain</span>
+            <span class="md">for a portfolio &mdash; needs a DNS record</span>
+        </button>
+    </div>
+
     <div class="pub-form">
-        <div class="f">
+        <div class="f" id="f-name">
             <label for="name">Path name</label>
             <input id="name" type="text" placeholder="web" autocomplete="off">
             <span class="hint">letters, digits, dashes</span>
         </div>
+
+        <div class="f" id="f-dom" hidden>
+            <label for="domain">Domain</label>
+            <input id="domain" type="text" placeholder="example.com" autocomplete="off">
+            <span class="hint">must already point at this server</span>
+        </div>
+
         <div class="f">
             <label for="port">Local port</label>
             <input id="port" list="portlist" type="number" placeholder="8082" min="1" max="65535">
             <datalist id="portlist"></datalist>
             <span class="hint" id="porthint">ports currently listening</span>
         </div>
+
         <button id="add" class="btn">Publish</button>
     </div>
 
     <div id="preview" class="preview"></div>
+    <div id="dnshelp" class="dnshelp" hidden></div>
     <div id="msg" class="error" hidden></div>
 
     <h2 class="sec">Published</h2>
     <div id="rows" class="rows"></div>
 
     <p class="foot">
-        Each entry becomes a Caddy route under the certificate you already have.
-        Containers stay bound to <code>127.0.0.1</code> &mdash; the only ports open
-        to the internet remain 80, 443, 22 and the VPN.
+        Each entry becomes a Caddy route under a certificate fetched automatically.
+        Containers stay bound to <code>127.0.0.1</code> &mdash; the only ports open to
+        the internet remain 80, 443, 22 and the VPN.
     </p>
 </div>
 <script src="publish.js"></script>

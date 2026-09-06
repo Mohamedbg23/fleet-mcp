@@ -85,3 +85,25 @@ code { background: #2a2a2a; padding: 1px 5px; border-radius: 3px; font-size: 11p
         overflow-wrap: anywhere; }
 .purl:hover { text-decoration: underline; }
 .empty { color: var(--dim); font-size: 13px; padding: 10px 2px; }
+
+/* --- publish: mode chooser + dns helper --- */
+.modes { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.mode { background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+        padding: 11px 16px; cursor: pointer; text-align: left; color: var(--tx);
+        display: flex; flex-direction: column; gap: 2px; min-width: 210px; font: inherit; }
+.mode:hover { border-color: #5a5a5a; }
+.mode.active { border-color: var(--accent); background: rgba(43,154,243,.10); }
+.mode .mt { font-size: 14px; font-weight: 500; }
+.mode .md { font-size: 11px; color: var(--dim); }
+
+.dnshelp { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+           border-radius: 4px; padding: 14px 16px; margin-top: 14px; font-size: 13px; }
+.dnsrec { display: grid; grid-template-columns: 70px 70px 1fr; gap: 8px; padding: 5px 0; }
+.dnsrec:first-of-type { color: var(--dim); font-size: 11px; text-transform: uppercase;
+                        letter-spacing: .5px; border-bottom: 1px solid var(--line); }
+.dnsrec.mono { font-family: monospace; font-size: 13px; }
+.tip { color: var(--dim); font-size: 12px; margin: 10px 0 0; line-height: 1.5; }
+.tip b { color: var(--tx); font-weight: 500; }
+.tag { font-size: 10px; padding: 1px 7px; border-radius: 9px; vertical-align: middle;
+       background: rgba(43,154,243,.18); color: #7dc3f7; border: 1px solid rgba(43,154,243,.4); }
+.tag.alt { background: rgba(150,150,150,.15); color: var(--dim); border-color: var(--line); }
