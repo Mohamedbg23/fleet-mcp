@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Publish</title>
+    <link rel="stylesheet" href="../base1/patternfly.css">
+    <link rel="stylesheet" href="fleet.css">
+    <script src="../base1/cockpit.js"></script>
+</head>
+<body>
+<div class="fleet-wrap">
+
+    <div class="fleet-head">
+        <div>
+            <h1>Publish a service</h1>
+            <p class="sub">Put a local port on your HTTPS domain. No firewall change, no extra open port.</p>
+        </div>
+    </div>
+
+    <div class="pub-form">
+        <div class="f">
+            <label for="name">Path name</label>
+            <input id="name" type="text" placeholder="web" autocomplete="off">
+            <span class="hint">letters, digits, dashes</span>
+        </div>
+        <div class="f">
+            <label for="port">Local port</label>
+            <input id="port" list="portlist" type="number" placeholder="8082" min="1" max="65535">
+            <datalist id="portlist"></datalist>
+            <span class="hint" id="porthint">ports currently listening</span>
+        </div>
+        <button id="add" class="btn">Publish</button>
+    </div>
+
+    <div id="preview" class="preview"></div>
+    <div id="msg" class="error" hidden></div>
+
+    <h2 class="sec">Published</h2>
+    <div id="rows" class="rows"></div>
+
+    <p class="foot">
+        Each entry becomes a Caddy route under the certificate you already have.
+        Containers stay bound to <code>127.0.0.1</code> &mdash; the only ports open
+        to the internet remain 80, 443, 22 and the VPN.
+    </p>
+</div>
+<script src="publish.js"></script>
+</body>
+</html>

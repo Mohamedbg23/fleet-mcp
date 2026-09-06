@@ -5,9 +5,13 @@
             "label": "Fleet",
             "path": "index.html",
             "order": 5,
-            "keywords": [
-                { "matches": ["fleet", "servers", "overview", "all", "cluster"] }
-            ]
+            "keywords": [ { "matches": ["fleet", "servers", "overview", "all", "cluster"] } ]
+        },
+        "publish": {
+            "label": "Publish",
+            "path": "publish.html",
+            "order": 6,
+            "keywords": [ { "matches": ["publish", "expose", "port", "proxy", "https", "domain", "container"] } ]
         }
     }
 }
