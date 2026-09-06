@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Fleet</title>
+    <!-- Cockpit's CSP forbids inline script/style, so both are external files -->
+    <link rel="stylesheet" href="../base1/patternfly.css">
+    <link rel="stylesheet" href="fleet.css">
+    <script src="../base1/cockpit.js"></script>
+</head>
+<body>
+<div class="fleet-wrap">
+
+    <div class="fleet-head">
+        <div>
+            <h1>Fleet</h1>
+            <p class="sub">Every server at a glance. Polled only while this page is open.</p>
+        </div>
+        <div class="fleet-actions">
+            <span id="updated" class="updated"></span>
+            <button id="refresh" class="btn">Refresh</button>
+        </div>
+    </div>
+
+    <div id="summary" class="summary"></div>
+    <div id="cards" class="cards"></div>
+    <div id="error" class="error" hidden></div>
+
+    <p class="foot">
+        Data is gathered on demand by <code>fleet-status-json</code> over SSH.
+        Nothing runs in the background &mdash; close this tab and the cost returns to zero.
+    </p>
+</div>
+<script src="fleet.js"></script>
+</body>
+</html>

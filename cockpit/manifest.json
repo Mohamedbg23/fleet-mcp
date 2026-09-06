@@ -1,0 +1,13 @@
+{
+    "version": 0,
+    "menu": {
+        "index": {
+            "label": "Fleet",
+            "path": "index.html",
+            "order": 5,
+            "keywords": [
+                { "matches": ["fleet", "servers", "overview", "all", "cluster"] }
+            ]
+        }
+    }
+}

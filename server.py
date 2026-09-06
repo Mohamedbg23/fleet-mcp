@@ -101,13 +101,17 @@ def _targets(on, hosts):
     return None
 
 
+def _target(addr):
+    """A host entry may be "user@address" when its SSH login is not the default."""
+    return addr if "@" in addr else "%s@%s" % (USER, addr)
+
 def _exec(command, host, timeout, hosts):
     if host == "local":
         argv = ["bash", "-lc", command]
     else:
         argv = ["ssh", "-i", KEY, "-o", "StrictHostKeyChecking=accept-new",
                 "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
-                "%s@%s" % (USER, hosts[host]), command]
+                _target(hosts[host]), command]
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:

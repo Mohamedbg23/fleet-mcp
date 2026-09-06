@@ -41,7 +41,7 @@ sudo -u "$SVC_USER" python3 -m venv /opt/mcp-fleet/venv
 sudo -u "$SVC_USER" /opt/mcp-fleet/venv/bin/pip install -q --upgrade pip "mcp<2"
 touch /var/log/mcp-fleet.log && chown "$SVC_USER":"$SVC_USER" /var/log/mcp-fleet.log
 
-echo "==> host list (add servers later with ./fleet-add)"
+echo "==> host list (add servers later with: fleet add)"
 install -d -m 755 /etc/mcp-fleet
 [ -f /etc/mcp-fleet/hosts.json ] || echo '{}' > /etc/mcp-fleet/hosts.json
 chown "$SVC_USER":"$SVC_USER" /etc/mcp-fleet/hosts.json
@@ -50,7 +50,11 @@ echo "==> fleet ssh key"
 if [ ! -f "$HOME_DIR/.ssh/fleet" ]; then
   sudo -u "$SVC_USER" ssh-keygen -t ed25519 -N "" -C fleet -f "$HOME_DIR/.ssh/fleet"
 fi
-install -m 755 "$SRC/fleet-add" /usr/local/bin/fleet-add
+install -m 755 "$SRC/fleet" /usr/local/bin/fleet
+install -m 755 "$SRC/fleet" /usr/local/bin/fleet
+ln -sf /usr/local/bin/fleet /usr/local/bin/fleet-add          # legacy name
+printf '#!/usr/bin/env bash\nexec /usr/local/bin/fleet list --json\n' > /usr/local/bin/fleet-status-json
+chmod 755 /usr/local/bin/fleet-status-json
 install -m 755 "$SRC/harden-ssh.sh" /usr/local/bin/harden-ssh.sh
 install -m 755 "$SRC/oci-keepalive.sh" /usr/local/bin/oci-keepalive.sh
 
@@ -109,7 +113,8 @@ cat <<DONE
  Add that to your MCP client as a custom/remote connector.
 
  Next:
-   fleet-add web-1 10.0.0.11 ~/web-1.key    # add a server
+   fleet add web-1 10.0.0.11 ~/web-1.key    # add a server
+   fleet list                               # see the whole fleet
    systemctl stop mcp-fleet                 # close the door when idle
 
  Treat that URL like a root password. Anyone holding it gets a
