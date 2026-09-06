@@ -15,6 +15,7 @@
 set -uo pipefail
 
 DIR=/etc/caddy/published
+SITES=/etc/caddy/sites
 CADDY=/etc/caddy/Caddyfile
 RESERVED="cockpit fleet api static assets base1 manifests.js login ping"
 
@@ -24,16 +25,23 @@ need_root() { [ "$(id -u)" -eq 0 ] || die "run with sudo"; }
 domain() { grep -oE '^[a-z0-9.-]+\.[a-z]{2,}' "$CADDY" | head -1; }
 
 cmd_list() {
-    mkdir -p "$DIR"
+    mkdir -p "$DIR" "$SITES"
     local any=0
     printf "%-16s %-22s %s\n" NAME TARGET URL
     for f in "$DIR"/*.caddy; do
         [ -e "$f" ] || continue
         any=1
-        local n t
-        n=$(basename "$f" .caddy)
-        t=$(grep -oE 'reverse_proxy [^ ]+' "$f" | awk '{print $2}')
+        local n t; n=$(basename "$f" .caddy)
+        t=$(grep -oE "reverse_proxy [^ ]+" "$f" | awk "{print \$2}")
         printf "%-16s %-22s https://%s/%s/\n" "$n" "$t" "$(domain)" "$n"
+    done
+    for f in "$SITES"/*.caddy; do
+        [ -e "$f" ] || continue
+        any=1
+        local n t d; n=$(basename "$f" .caddy)
+        t=$(grep -oE "reverse_proxy [^ ]+" "$f" | awk "{print \$2}")
+        d=$(grep -oE "^[a-z0-9.-]+ \{" "$f" | tr -d " {")
+        printf "%-16s %-22s https://%s/\n" "$n" "$t" "$d"
     done
     [ "$any" = 0 ] && echo "(nothing published yet)"
     return 0
@@ -41,23 +49,57 @@ cmd_list() {
 
 cmd_add() {
     need_root
-    local name=${1:-} port=${2:-} target=127.0.0.1
-    [ "${3:-}" = "--target" ] && target=${4:-127.0.0.1}
-    [ -n "$name" ] && [ -n "$port" ] || die "usage: fleet-publish add NAME PORT [--target HOST]"
+    local name=${1:-} port=${2:-} target=127.0.0.1 dom=""
+    shift 2 2>/dev/null
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --target) target=${2:-127.0.0.1}; shift 2 ;;
+            --domain) dom=${2:-}; shift 2 ;;
+            *) die "unknown flag $1" ;;
+        esac
+    done
+    [ -n "$name" ] && [ -n "$port" ] || die "usage: fleet-publish add NAME PORT [--target HOST] [--domain example.com]"
     [[ "$name" =~ ^[a-z0-9][a-z0-9-]{0,30}$ ]] || die "name must be lowercase letters, digits and dashes"
     [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die "port must be 1-65535"
+
+    mkdir -p "$DIR" "$SITES"
+
+    if [ -n "$dom" ]; then
+        # a whole domain of its own -- Caddy will fetch a certificate for it
+        [[ "$dom" =~ ^[a-z0-9.-]+\.[a-z]{2,}$ ]] || die "that does not look like a domain"
+        local ip resolved
+        ip=$(curl -s --max-time 8 https://api.ipify.org 2>/dev/null)
+        resolved=$(getent hosts "$dom" 2>/dev/null | awk "{print \$1}" | head -1)
+        if [ -n "$resolved" ] && [ -n "$ip" ] && [ "$resolved" != "$ip" ]; then
+            echo "warning: $dom currently resolves to $resolved, this server is $ip"
+            echo "         Caddy cannot get a certificate until DNS points here."
+        elif [ -z "$resolved" ]; then
+            echo "warning: $dom does not resolve yet -- add the DNS record first"
+        fi
+        cat > "$SITES/$name.caddy" <<EOF
+# published by fleet-publish
+$dom {
+    reverse_proxy $target:$port
+}
+EOF
+        if ! caddy validate --config "$CADDY" --adapter caddyfile >/dev/null 2>&1; then
+            rm -f "$SITES/$name.caddy"; die "Caddy rejected that config; nothing changed"
+        fi
+        systemctl reload caddy || die "caddy reload failed"
+        echo "published: https://$dom/  ->  $target:$port"
+        echo "(certificate is requested on the first visit; give it ~30s)"
+        return 0
+    fi
+
     for r in $RESERVED; do
         [ "$name" = "$r" ] && die "'$name' is reserved by the panel itself"
     done
-
-    mkdir -p "$DIR"
     cat > "$DIR/$name.caddy" <<EOF
 # published by fleet-publish
 handle_path /$name* {
     reverse_proxy $target:$port
 }
 EOF
-
     if ! caddy validate --config "$CADDY" --adapter caddyfile >/dev/null 2>&1; then
         rm -f "$DIR/$name.caddy"
         die "Caddy rejected that config; nothing changed"
@@ -70,8 +112,11 @@ cmd_rm() {
     need_root
     local name=${1:-}
     [ -n "$name" ] || die "usage: fleet-publish rm NAME"
-    [ -f "$DIR/$name.caddy" ] || die "'$name' is not published"
-    rm -f "$DIR/$name.caddy"
+    local f=""
+    [ -f "$DIR/$name.caddy" ] && f="$DIR/$name.caddy"
+    [ -f "$SITES/$name.caddy" ] && f="$SITES/$name.caddy"
+    [ -n "$f" ] || die "'$name' is not published"
+    rm -f "$f"
     caddy validate --config "$CADDY" --adapter caddyfile >/dev/null 2>&1 \
         || die "config invalid after removal -- check $CADDY by hand"
     systemctl reload caddy || die "caddy reload failed"
