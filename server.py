@@ -25,8 +25,10 @@ Hosts live in /etc/mcp-fleet/hosts.json and are hot-reloaded, so adding a
 server never means editing this file or restarting the service.
 """
 import base64
+import contextlib
 import json
 import os
+import signal
 import subprocess
 import threading
 import time
@@ -34,6 +36,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 
 AUDIT = Path("/var/log/mcp-fleet.log")
@@ -42,6 +45,9 @@ KEY = os.environ.get("MCP_FLEET_KEY", "/home/ubuntu/.ssh/fleet")
 USER = os.environ.get("MCP_FLEET_USER", "ubuntu")
 CAP = int(os.environ.get("MCP_FLEET_CAP", "4000"))
 PORT = int(os.environ.get("MCP_PORT", "8765"))
+# Clients abandon a tool call after ~230 s; a longer foreground call only ever ends in a client
+# timeout, so it runs as a bg job instead and the caller collects it with '#job ID'.
+FG_MAX = int(os.environ.get("MCP_FLEET_FG_MAX", "170"))
 
 # One compact line per host. Prefixes are dropped and units implied:
 # c=cpu%, m=mem%, d=disk%, then keep-alive and fail2ban as +/-.
@@ -62,6 +68,9 @@ _conf_cache = {"mtime": None, "hosts": {}}
 mcp = FastMCP("fleet")
 mcp.settings.host = "127.0.0.1"
 mcp.settings.port = PORT
+# Many conversations share this server: no per-client session state to lose on restart or to
+# pile up for days (stale session ids were answered 400). Jobs live in JOBS, not in sessions.
+mcp.settings.stateless_http = True
 
 
 def _hosts():
@@ -112,12 +121,20 @@ def _exec(command, host, timeout, hosts):
         argv = ["ssh", "-i", KEY, "-o", "StrictHostKeyChecking=accept-new",
                 "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
                 _target(hosts[host]), command]
+    # Own process group: on timeout the whole group dies, so a background grandchild that
+    # still holds stdout can no longer keep the call (and its thread) hanging.
+    p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                         start_new_session=True)
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        out, err = p.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(p.pid, signal.SIGKILL)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            p.communicate(timeout=5)
         return 124, "timed out after %ds" % timeout
-    err = "\n".join(l for l in p.stderr.splitlines() if "Permanently added" not in l)
-    txt = (p.stdout.rstrip() + ("\n" + err.rstrip() if err.strip() else "")).strip()
+    err = "\n".join(l for l in err.splitlines() if "Permanently added" not in l)
+    txt = (out.rstrip() + ("\n" + err.rstrip() if err.strip() else "")).strip()
     return p.returncode, txt
 
 
@@ -155,12 +172,18 @@ def _fanout(cmd, targets, timeout, hosts):
 
 
 @mcp.tool()
-def sh(cmd: str, on: str = "local", timeout: int = 60, quiet: bool = False,
-       bg: bool = False, write: str = "", sudo: bool = False):
+async def sh(cmd: str, on: str = "local", timeout: int = 60, quiet: bool = False,
+             bg: bool = False, write: str = "", sudo: bool = False):
     """Fleet shell, parallel. on: host|all|remote|comma-list. Bare reply=all
     targets agreed+succeeded; else one line per host in target order, 'host>out'
     if multiline, !rcN on failure. '#status'=health, '#job ID'=collect.
     quiet=rc only. bg=detach>170s. write=PATH writes cmd to that file."""
+    # A sync tool would run ON the event loop and freeze every other connection while one
+    # command runs; a worker thread keeps calls from different conversations parallel.
+    return await anyio.to_thread.run_sync(_sh, cmd, on, timeout, quiet, bg, write, sudo)
+
+
+def _sh(cmd, on, timeout, quiet, bg, write, sudo):
     hosts = _hosts()
     if cmd.startswith("#job"):
         b = cmd.split()
@@ -182,6 +205,9 @@ def sh(cmd: str, on: str = "local", timeout: int = 60, quiet: bool = False,
         real = STATUS_CMD if cmd.strip() == "#status" else cmd
         _audit("RUN", "%s :: %s" % (",".join(targets), real[:200]))
 
+    note = ""
+    if not bg and timeout > FG_MAX:
+        bg, note = True, " (timeout %ds > %ds: auto-bg, collect with #job)" % (timeout, FG_MAX)
     if bg:
         jid = uuid.uuid4().hex[:6]
         JOBS[jid] = None
@@ -192,7 +218,7 @@ def sh(cmd: str, on: str = "local", timeout: int = 60, quiet: bool = False,
             except Exception as e:
                 JOBS[jid] = "error: %s" % e
         threading.Thread(target=work, daemon=True).start()
-        return "job %s on %s" % (jid, ",".join(targets))
+        return "job %s on %s%s" % (jid, ",".join(targets), note)
 
     return _render(_fanout(real, targets, timeout, hosts), quiet)
 
