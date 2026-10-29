@@ -178,6 +178,17 @@ FAIL db-2:rc3               quiet mode; success is just "ok"
 
 ---
 
+## Many chats at once
+
+One hub serves every conversation that has the connector, at the same time:
+
+- Each call runs in its own worker thread, so a slow command in one chat never blocks another
+  (3 parallel 3-second calls finish in ~3 s, not 9 s — `tests/test_concurrency.py`).
+- A call with `timeout` above 170 s runs as a background job automatically (clients give up on a
+  call after ~230 s); collect it with `sh("#job ID")`.
+- A timed-out command is killed with its whole process group, so it can't leave the call hanging.
+- The HTTP transport is stateless: restarting the hub never strands a client's session.
+
 ## Why it's cheap
 
 Every one of these was chosen by measurement, not taste.
